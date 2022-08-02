@@ -1,10 +1,243 @@
 use windows::{core::*, Foundation::Numerics::*, Win32::Foundation::*, Win32::Graphics::Direct2D::Common::*, Win32::Graphics::Direct2D::*, Win32::Graphics::Direct3D::*, Win32::Graphics::Direct3D11::*, Win32::Graphics::Dxgi::Common::*, Win32::Graphics::Dxgi::*, Win32::Graphics::Gdi::*, Win32::System::Com::*, Win32::System::LibraryLoader::*, Win32::System::Performance::*, Win32::System::SystemInformation::GetLocalTime, Win32::UI::Animation::*, Win32::UI::WindowsAndMessaging::*};
+
+/*use windows::Win32::System::Console::GetStdHandle;
+use windows::Win32::System::Console::STD_OUTPUT_HANDLE;
+use windows::Win32::System::Console::CONSOLE_SCREEN_BUFFER_INFO;
+use windows::Win32::System::Console::SMALL_RECT;
+use windows::Win32::System::Console::COORD;
+use windows::Win32::System::Console::CHAR_INFO;
+use windows::Win32::System::Console::GetConsoleScreenBufferInfo;
+use windows::Win32::System::Console::ScrollConsoleScreenBufferW;
+use windows::Win32::System::Console::SetConsoleCursorPosition;*/
+
+use std::thread;
 use std::time::{Duration, Instant};
 use rand::Rng;
+use std::io::{self, Write};
+
+// the game state
+
+const APP_NAME: &str = "Game of life direct 2d";
+
+const MAX_COLUMN_COUNT: u32 = 825;
+const MAX_ROWS_COUNT: u32 = 420;
+
+const MINIMAL_UPDATE_DELAY: u8 = 1;
+
+#[derive(Debug, Copy, Clone)]
+struct Cell {
+    is_fill: u8,
+    position_x: u16,
+    position_y: u16,
+}
+#[derive(Debug)]
+struct Cells {
+    cells_array: Vec<Vec<Cell>>,
+}
+
+impl Cells {
+    fn new() -> Self {
+        Self {
+            cells_array: Vec::new(),
+        }
+    }
+
+    fn fill_cells_array(&mut self) {
+        if self.cells_array.len() == 0 {
+            let total_count = MAX_COLUMN_COUNT * MAX_ROWS_COUNT;
+            let mut x: u16 = 1;
+            let mut y: u16 = 1;
+
+            let mut iter = 0;
+
+            let mut is_fill: u8 = 0;
+
+            let mut rand_rng = rand::thread_rng();
+
+            self.cells_array.push(Vec::new());
+
+            while iter != total_count {
+                if rand_rng.gen_range(0..2) == 1 {
+                    is_fill = 1;
+                } else {
+                    is_fill = 0;
+                }
+
+                self.cells_array[(y - 1) as usize].push(Cell {
+                    is_fill: is_fill,
+                    position_x: x,
+                    position_y: y,
+                });
+
+                if (x as u32) < MAX_COLUMN_COUNT {
+                    x += 1;
+                } else {
+                    self.cells_array.push(Vec::new());
+                    x = 1;
+                    y += 1;
+                }
+                iter += 1;
+            }
+        }
+    }
+}
+
+struct GameState {
+    cells: Cells,
+    fps: String,
+    is_game_on: bool,
+    is_game_over: bool,
+}
+
+impl GameState {
+    fn new() -> Self {
+        let mut new_game_state = Self {
+            cells: Cells::new(),
+            fps: String::from("fps: 0"),
+            is_game_on: true,
+            is_game_over: false,
+        };
+
+        new_game_state.cells.fill_cells_array();
+
+        new_game_state
+    }
+
+    fn cell_status_update(&mut self) {
+        let cells_arr_copy = self.cells.cells_array.clone();
+        let mut new_cells_array = cells_arr_copy.clone();
+    
+        for cell_column in cells_arr_copy.iter() {
+            for cell in cell_column {
+                let mut near_cells: Vec<Cell> = Vec::new();
+    
+                let cell_position_x: i32 = (cell.position_x - 1) as i32;
+                let cell_position_y: i32 = (cell.position_y - 1) as i32;
+    
+                if cell_position_x - 1 > -1 && cell_position_y - 1 > -1 {
+                    near_cells.push(
+                        cells_arr_copy[(cell_position_y - 1) as usize][(cell_position_x - 1) as usize],
+                    );
+                }
+    
+                if cell_position_y - 1 > -1 && cell_position_x < MAX_COLUMN_COUNT as i32 {
+                    near_cells
+                        .push(cells_arr_copy[(cell_position_y - 1) as usize][cell_position_x as usize]);
+                }
+    
+                if cell_position_y - 1 > -1 && cell_position_x + 1 < MAX_COLUMN_COUNT as i32 {
+                    near_cells.push(
+                        cells_arr_copy[(cell_position_y - 1) as usize][(cell_position_x + 1) as usize],
+                    );
+                }
+    
+                if cell_position_x - 1 > -1 && cell_position_y < MAX_ROWS_COUNT as i32 {
+                    near_cells
+                        .push(cells_arr_copy[cell_position_y as usize][(cell_position_x - 1) as usize]);
+                }
+    
+                if cell_position_x + 1 < MAX_COLUMN_COUNT as i32
+                    && cell_position_y < MAX_ROWS_COUNT as i32
+                {
+                    near_cells
+                        .push(cells_arr_copy[cell_position_y as usize][(cell_position_x + 1) as usize]);
+                }
+    
+                if cell_position_x - 1 > -1 && cell_position_y + 1 < MAX_ROWS_COUNT as i32 {
+                    near_cells.push(
+                        cells_arr_copy[(cell_position_y + 1) as usize][(cell_position_x - 1) as usize],
+                    );
+                }
+    
+                if cell_position_y + 1 < MAX_ROWS_COUNT as i32
+                    && cell_position_x < MAX_COLUMN_COUNT as i32
+                {
+                    near_cells
+                        .push(cells_arr_copy[(cell_position_y + 1) as usize][cell_position_x as usize]);
+                }
+    
+                if cell_position_x + 1 < MAX_COLUMN_COUNT as i32
+                    && cell_position_y + 1 < MAX_ROWS_COUNT as i32
+                {
+                    near_cells.push(
+                        cells_arr_copy[(cell_position_y + 1) as usize][(cell_position_x + 1) as usize],
+                    );
+                }
+    
+                let mut count_near_cells = 0;
+    
+                for curent_near_cell in near_cells {
+                    if curent_near_cell.is_fill == 1 {
+                        count_near_cells += 1;
+                    }
+                }
+    
+                if (cell.is_fill == 0 || cell.is_fill == 2) && count_near_cells == 3 {
+                    new_cells_array[cell_position_y as usize][cell_position_x as usize].is_fill = 1;
+                } else if cell.is_fill == 1 && (count_near_cells < 2 || count_near_cells > 3) {
+                    new_cells_array[cell_position_y as usize][cell_position_x as usize].is_fill = 0;
+                }
+            }
+        }
+    
+        self.cells.cells_array = new_cells_array;
+    }
+
+    fn change_game_state(&mut self) {
+        self.is_game_on = !self.is_game_on;
+    }
+
+    fn change_game_over_state(&mut self) {
+        self.is_game_over = !self.is_game_over;
+    }
+}
+
+// console functions
+
+/*fn clear_console() {
+    unsafe {
+        let console_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        let mut csbi = CONSOLE_SCREEN_BUFFER_INFO::default();
+        let mut scroll_rect = SMALL_RECT::default();
+        let mut scroll_target = COORD::default();
+        let fill = CHAR_INFO::default();
+
+        // Get the number of character cells in the current buffer.
+        if GetConsoleScreenBufferInfo(console_handle.clone().unwrap(), &mut csbi) == false {
+            return;
+        }
+
+        // Scroll the rectangle of the entire buffer.
+        scroll_rect.Left = 0;
+        scroll_rect.Top = 0;
+        scroll_rect.Right = csbi.dwSize.X;
+        scroll_rect.Bottom = csbi.dwSize.Y;
+
+        // Scroll it upwards off the top of the buffer with a magnitude of the entire height.
+        scroll_target.X = 0;
+        scroll_target.Y = 0;
+
+        // Do the scroll
+        ScrollConsoleScreenBufferW(
+            console_handle.clone().unwrap(),
+            &scroll_rect,
+            &SMALL_RECT::default(),
+            scroll_target,
+            &fill,
+        );
+
+        // Move the cursor to the top left corner too.
+        csbi.dwCursorPosition.X = 0;
+        csbi.dwCursorPosition.Y = 0;
+
+        SetConsoleCursorPosition(console_handle.clone().unwrap(), csbi.dwCursorPosition);
+    }
+}*/
 
 // the logic of creating a window
+
 fn create_brush(target: &ID2D1DeviceContext) -> Result<ID2D1SolidColorBrush> {
-    let color = D2D1_COLOR_F { r: 0.92, g: 0.38, b: 0.208, a: 1.0 };
+    let color = D2D1_COLOR_F { r: 0.9, g: 0.8, b: 0.1, a: 1.0 };
 
     let properties = D2D1_BRUSH_PROPERTIES { opacity: 0.8, transform: Matrix3x2::identity() };
 
@@ -138,6 +371,7 @@ struct Window {
     dpi: f32,
     visible: bool,
     occlusion: u32,
+    game_state: GameState
 }
 
 impl Window {
@@ -148,6 +382,8 @@ impl Window {
         let mut dpi = 0.0;
         let mut dpiy = 0.0;
         unsafe { factory.GetDesktopDpi(&mut dpi, &mut dpiy) };
+
+        let game_state = GameState::new();
 
         Ok(Window {
             handle: HWND(0),
@@ -161,6 +397,7 @@ impl Window {
             dpi,
             visible: false,
             occlusion: 0,
+            game_state
         })
     }
 
@@ -179,12 +416,12 @@ impl Window {
             self.create_device_size_resources()?;
         }
 
-        let target = self.target.as_ref().unwrap();
-        unsafe { target.BeginDraw() };
-        self.draw(target)?;
+        let target = self.target.clone();
+        unsafe { target.as_ref().unwrap().BeginDraw() };
+        self.draw(target.as_ref().unwrap())?;
 
         unsafe {
-            target.EndDraw(std::ptr::null_mut(), std::ptr::null_mut())?;
+            target.as_ref().unwrap().EndDraw(std::ptr::null_mut(), std::ptr::null_mut())?;
         }
 
         if let Err(error) = self.present(1, 0) {
@@ -214,16 +451,15 @@ impl Window {
         unsafe { self.swapchain.as_ref().unwrap().Present(sync, flags).ok() }
     }
 
-    fn draw(&self, target: &ID2D1DeviceContext) -> Result<()> {
-        let game_space = self.game_space.as_ref().unwrap();
+    fn draw(&mut self, target: &ID2D1DeviceContext) -> Result<()> {
+        let game_space = self.game_space.clone();
 
         unsafe {
-
-            //target.Clear(&D2D1_COLOR_F { r: 1.0, g: 1.0, b: 1.0, a: 1.0 });
+            target.Clear(&D2D1_COLOR_F { r: 0.1, g: 0.1, b: 0.1, a: 1.0 });
 
             let mut previous = None;
             target.GetTarget(&mut previous);
-            target.SetTarget(game_space);
+            target.SetTarget(game_space.as_ref().unwrap());
             target.Clear(std::ptr::null());
             self.draw_cells()?;
             target.SetTarget(previous.as_ref());
@@ -231,26 +467,56 @@ impl Window {
 
             target.SetTransform(&Matrix3x2::identity());
 
-            target.DrawImage(game_space, std::ptr::null(), std::ptr::null(), D2D1_INTERPOLATION_MODE_LINEAR, D2D1_COMPOSITE_MODE_SOURCE_OVER);
+            target.DrawImage(game_space.as_ref().unwrap(), std::ptr::null(), std::ptr::null(), D2D1_INTERPOLATION_MODE_LINEAR, D2D1_COMPOSITE_MODE_SOURCE_OVER);
         }
 
         Ok(())
     }
 
-    fn draw_cells(&self) -> Result<()> {
+    fn draw_cells(&mut self) -> Result<()> {
         let target = self.target.as_ref().unwrap();
         let brush = self.brush.as_ref().unwrap();
 
-        unsafe {
-            let rect = D2D_RECT_F {
-                left: 10.0,
-                top: 10.0,
-                right: 20.0,
-                bottom: 20.0,
-            };
-            //target.DrawRectangle(&rect, brush, 2.0, &self.style);
-            target.FillRectangle(&rect, brush);
+        let size: i32 = 2;
+        let mut left_position: i32 = size;
+        let mut top_position: i32 = size;
+        let mut right_position: i32 = size * 2;
+        let mut bottom_position: i32 = size * 2;
+
+        let mut prev_cell_position_y: u16 = 1;
+
+        let mut cells = self.game_state.cells.cells_array.clone();
+
+        for cell_column in self.game_state.cells.cells_array.iter() {
+            for cell in cell_column {
+                if prev_cell_position_y < cell.position_y {
+                    left_position = size;
+                    top_position = top_position + size;
+                    right_position = size * 2;
+                    bottom_position = bottom_position + size;
+                }
+                let rect = D2D_RECT_F {
+                    left: left_position as f32,
+                    top: top_position as f32,
+                    right: right_position as f32,
+                    bottom: bottom_position as f32,
+                };
+                if cell.is_fill == 1 {
+                    unsafe {
+                        target.FillRectangle(&rect, brush);
+                    }
+                } else if cell.is_fill == 0 {
+                    cells[(cell.position_y - 1) as usize][(cell.position_x - 1) as usize].is_fill = 2;
+                }
+
+                left_position = left_position + size;
+                right_position = right_position + size;
+
+                prev_cell_position_y = cell.position_y;
+            }
         }
+
+        self.game_state.cells.cells_array = cells;
 
         Ok(())
     }
@@ -365,11 +631,23 @@ impl Window {
 
             loop {
                 if self.visible {
-                    //let update_time = Instant::now();
+                    let update_time = Instant::now();
 
+                    self.game_state.cell_status_update();
                     self.render()?;
 
-                   //print!("fps: {}", 1000 / (update_time.elapsed().as_millis()));
+                    //clear_console();
+
+                    
+                    let stdout = io::stdout();
+                    let mut handle = io::BufWriter::new(stdout);
+                   // writeln!(handle, "as_millis {}", 1000 / (update_time.elapsed().as_millis() as u16));
+                    writeln!(handle, "as_millis {}", update_time.elapsed().as_millis() as u16);
+                    
+
+                    thread::sleep(Duration::from_millis(MINIMAL_UPDATE_DELAY as u64));
+
+                    //self.game_state.fps = format!("fps: {}", 1000 / update_time.elapsed().as_millis());
 
                     while PeekMessageA(&mut message, None, 0, 0, PM_REMOVE).into() {
                         if message.message == WM_QUIT {
