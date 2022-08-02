@@ -26,7 +26,7 @@ const MINIMAL_UPDATE_DELAY: u8 = 1;
 
 #[derive(Debug, Copy, Clone)]
 struct Cell {
-    is_fill: u8,
+    is_fill: bool,
     position_x: u16,
     position_y: u16,
 }
@@ -50,7 +50,7 @@ impl Cells {
 
             let mut iter = 0;
 
-            let mut is_fill: u8 = 0;
+            let mut is_fill: bool = false;
 
             let mut rand_rng = rand::thread_rng();
 
@@ -58,13 +58,13 @@ impl Cells {
 
             while iter != total_count {
                 if rand_rng.gen_range(0..2) == 1 {
-                    is_fill = 1;
+                    is_fill = true;
                 } else {
-                    is_fill = 0;
+                    is_fill = false;
                 }
 
                 self.cells_array[(y - 1) as usize].push(Cell {
-                    is_fill: is_fill,
+                    is_fill,
                     position_x: x,
                     position_y: y,
                 });
@@ -167,15 +167,15 @@ impl GameState {
                 let mut count_near_cells = 0;
     
                 for curent_near_cell in near_cells {
-                    if curent_near_cell.is_fill == 1 {
+                    if curent_near_cell.is_fill == true {
                         count_near_cells += 1;
                     }
                 }
     
-                if (cell.is_fill == 0 || cell.is_fill == 2) && count_near_cells == 3 {
-                    new_cells_array[cell_position_y as usize][cell_position_x as usize].is_fill = 1;
-                } else if cell.is_fill == 1 && (count_near_cells < 2 || count_near_cells > 3) {
-                    new_cells_array[cell_position_y as usize][cell_position_x as usize].is_fill = 0;
+                if cell.is_fill == false && count_near_cells == 3 {
+                    new_cells_array[cell_position_y as usize][cell_position_x as usize].is_fill = true;
+                } else if cell.is_fill == true && (count_near_cells < 2 || count_near_cells > 3) {
+                    new_cells_array[cell_position_y as usize][cell_position_x as usize].is_fill = false;
                 }
             }
         }
@@ -288,7 +288,7 @@ fn create_render_target(factory: &ID2D1Factory1, device: &ID3D11Device) -> Resul
     unsafe {
         let d2device = factory.CreateDevice(&device.cast::<IDXGIDevice>()?)?;
 
-        let target = d2device.CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
+        let target = d2device.CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_ENABLE_MULTITHREADED_OPTIMIZATIONS)?;
 
         target.SetUnitMode(D2D1_UNIT_MODE_DIPS);
 
@@ -485,8 +485,6 @@ impl Window {
 
         let mut prev_cell_position_y: u16 = 1;
 
-        let mut cells = self.game_state.cells.cells_array.clone();
-
         for cell_column in self.game_state.cells.cells_array.iter() {
             for cell in cell_column {
                 if prev_cell_position_y < cell.position_y {
@@ -501,12 +499,10 @@ impl Window {
                     right: right_position as f32,
                     bottom: bottom_position as f32,
                 };
-                if cell.is_fill == 1 {
+                if cell.is_fill == true {
                     unsafe {
                         target.FillRectangle(&rect, brush);
                     }
-                } else if cell.is_fill == 0 {
-                    cells[(cell.position_y - 1) as usize][(cell.position_x - 1) as usize].is_fill = 2;
                 }
 
                 left_position = left_position + size;
@@ -515,8 +511,6 @@ impl Window {
                 prev_cell_position_y = cell.position_y;
             }
         }
-
-        self.game_state.cells.cells_array = cells;
 
         Ok(())
     }
