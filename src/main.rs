@@ -19,8 +19,8 @@ use std::io::{self, Write};
 
 const APP_NAME: &str = "Game of life direct 2d";
 
-const MAX_COLUMN_COUNT: u32 = 825;
-const MAX_ROWS_COUNT: u32 = 420;
+const MAX_COLUMN_COUNT: u32 = 850;
+const MAX_ROWS_COUNT: u32 = 440;
 
 const MINIMAL_UPDATE_DELAY: u8 = 1;
 
@@ -485,6 +485,13 @@ impl Window {
 
         let mut prev_cell_position_y: u16 = 1;
 
+        let mut rect = D2D_RECT_F {
+            left: left_position as f32,
+            top: top_position as f32,
+            right: right_position as f32,
+            bottom: bottom_position as f32,
+        };
+
         for cell_column in self.game_state.cells.cells_array.iter() {
             for cell in cell_column {
                 if prev_cell_position_y < cell.position_y {
@@ -492,13 +499,12 @@ impl Window {
                     top_position = top_position + size;
                     right_position = size * 2;
                     bottom_position = bottom_position + size;
+
+                    rect.left = left_position as f32;
+                    rect.top = top_position as f32;
+                    rect.right = right_position as f32;
+                    rect.bottom = bottom_position as f32;
                 }
-                let rect = D2D_RECT_F {
-                    left: left_position as f32,
-                    top: top_position as f32,
-                    right: right_position as f32,
-                    bottom: bottom_position as f32,
-                };
                 if cell.is_fill == true {
                     unsafe {
                         target.FillRectangle(&rect, brush);
@@ -507,6 +513,9 @@ impl Window {
 
                 left_position = left_position + size;
                 right_position = right_position + size;
+
+                rect.left = left_position as f32;
+                rect.right = right_position as f32;
 
                 prev_cell_position_y = cell.position_y;
             }
