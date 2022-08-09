@@ -630,6 +630,8 @@ impl Window {
             debug_assert!(handle == self.handle);
             let mut message = MSG::default();
 
+            let stdout = io::stdout();
+
             loop {
                 if self.visible {
                     let update_time = Instant::now();
@@ -639,12 +641,8 @@ impl Window {
 
                     //clear_console();
 
-                    
-                    let stdout = io::stdout();
-                    let mut handle = io::BufWriter::new(stdout);
-                   // writeln!(handle, "as_millis {}", 1000 / (update_time.elapsed().as_millis() as u16));
-                    writeln!(handle, "as_millis {}", update_time.elapsed().as_millis() as u16);
-                    
+                    let mut handle = io::BufWriter::new(&stdout);
+                    writeln!(handle, "render time: {} millis", update_time.elapsed().as_millis() as u16);
 
                     thread::sleep(Duration::from_millis(MINIMAL_UPDATE_DELAY as u64));
 
