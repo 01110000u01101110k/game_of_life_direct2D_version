@@ -1,4 +1,4 @@
-use windows::{core::*, Foundation::Numerics::*, Win32::Foundation::*, Win32::Graphics::Direct2D::Common::*, Win32::Graphics::Direct2D::*, Win32::Graphics::Direct3D::*, Win32::Graphics::Direct3D11::*, Win32::Graphics::Dxgi::Common::*, Win32::Graphics::Dxgi::*, Win32::Graphics::Gdi::*, Win32::System::Com::*, Win32::System::LibraryLoader::*, Win32::System::Performance::*, Win32::System::SystemInformation::GetLocalTime, Win32::UI::Animation::*, Win32::UI::WindowsAndMessaging::*};
+use windows::{core::*, Foundation::Numerics::*, Win32::Foundation::*, Win32::Graphics::Direct2D::Common::*, Win32::Graphics::Direct2D::*, Win32::Graphics::Direct3D::*, Win32::Graphics::Direct3D11::*, Win32::Graphics::Dxgi::Common::*, Win32::Graphics::Dxgi::*, Win32::Graphics::Gdi::*, Win32::System::Com::*, Win32::System::LibraryLoader::*, Win32::UI::WindowsAndMessaging::*};
 
 /*use windows::Win32::System::Console::GetStdHandle;
 use windows::Win32::System::Console::STD_OUTPUT_HANDLE;
@@ -16,8 +16,6 @@ use rand::Rng;
 use std::io::{self, Write};
 
 // the game state
-
-const APP_NAME: &str = "Game of life direct 2d";
 
 const MAX_COLUMN_COUNT: u32 = 850;
 const MAX_ROWS_COUNT: u32 = 440;
@@ -626,7 +624,7 @@ impl Window {
             let atom = RegisterClassA(&wc);
             debug_assert!(atom != 0);
 
-            let handle = CreateWindowExA(WINDOW_EX_STYLE::default(), window_class, s!("Sample Window"), WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, None, None, instance, self as *mut _ as _);
+            let handle = CreateWindowExA(WINDOW_EX_STYLE::default(), window_class, s!("Game of life direct 2d"), WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, None, None, instance, self as *mut _ as _);
 
             debug_assert!(handle.0 != 0);
             debug_assert!(handle == self.handle);
