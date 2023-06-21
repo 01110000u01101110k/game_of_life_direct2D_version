@@ -14,6 +14,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use rand::Rng;
 use std::io::{self, Write};
+use rayon::prelude::*;
 
 // the game state
 
@@ -82,6 +83,7 @@ impl Cells {
 
 struct GameState {
     cells: Cells,
+    rectangles_for_render: Vec<D2D_RECT_F>,
     fps: String,
     is_game_on: bool,
     is_game_over: bool,
@@ -91,6 +93,7 @@ impl GameState {
     fn new() -> Self {
         let mut new_game_state = Self {
             cells: Cells::new(),
+            rectangles_for_render: Vec::new(),
             fps: String::from("fps: 0"),
             is_game_on: true,
             is_game_over: false,
@@ -103,10 +106,10 @@ impl GameState {
 
     fn cell_status_update(&mut self) {
         let cells_arr_copy = self.cells.cells_array.clone();
-        let mut new_cells_array = cells_arr_copy.clone();
-    
-        for cell_column in &cells_arr_copy {
-            for cell in cell_column {
+
+        let result: Vec<Vec<bool>> = cells_arr_copy.par_iter().map(|cell_column| {
+            let result: Vec<bool> = cell_column.par_iter().map(|cell| {
+                // логіка зміни стану "життя" клітини (обробка правил)
                 let cell_position_x: i32 = (cell.position_x - 1) as i32;
                 let cell_position_y: i32 = (cell.position_y - 1) as i32;
 
@@ -167,14 +170,73 @@ impl GameState {
                 }
     
                 if cell.is_fill == false && count_near_cells == 3 {
-                    new_cells_array[cell_position_y as usize][cell_position_x as usize].is_fill = true;
+                    return true;
                 } else if cell.is_fill == true && (count_near_cells < 2 || count_near_cells > 3) {
-                    new_cells_array[cell_position_y as usize][cell_position_x as usize].is_fill = false;
+                    return false;
+                } else {
+                    return cell.is_fill;
                 }
-            }
-        }
-    
-        self.cells.cells_array = new_cells_array;
+            }).collect();
+
+            result
+        }).collect();
+
+        let size: i32 = 2;
+        let mut left_position: i32 = size;
+        let mut top_position: i32 = size;
+        let mut right_position: i32 = size * 2;
+        let mut bottom_position: i32 = size * 2;
+
+        let mut prev_cell_position_y: u16 = 1;
+
+        let mut rect = D2D_RECT_F {
+            left: left_position as f32,
+            top: top_position as f32,
+            right: right_position as f32,
+            bottom: bottom_position as f32,
+        };
+
+        self.rectangles_for_render = Vec::new();
+
+        cells_arr_copy.iter().for_each(|cell_column| {
+            cell_column.iter().for_each(|cell| {
+                // логіка зміни стану "життя" клітини (збереження результатів)
+                let cell_position_x: i32 = (cell.position_x - 1) as i32;
+                let cell_position_y: i32 = (cell.position_y - 1) as i32;
+
+                if result[cell_position_y as usize][cell_position_x as usize] {
+                    self.cells.cells_array[cell_position_y as usize][cell_position_x as usize].is_fill = true;
+                } else {
+                    self.cells.cells_array[cell_position_y as usize][cell_position_x as usize].is_fill = false;
+                }
+
+                // створення прямокутника
+
+                if prev_cell_position_y < cell.position_y {
+                    left_position = size;
+                    top_position = top_position + size;
+                    right_position = size * 2;
+                    bottom_position = bottom_position + size;
+
+                    rect.left = left_position as f32;
+                    rect.top = top_position as f32;
+                    rect.right = right_position as f32;
+                    rect.bottom = bottom_position as f32;
+                }
+
+                if cell.is_fill {
+                    self.rectangles_for_render.push(rect);
+                }
+
+                left_position = left_position + size;
+                right_position = right_position + size;
+
+                rect.left = left_position as f32;
+                rect.right = right_position as f32;
+
+                prev_cell_position_y = cell.position_y;
+            });
+        });
     }
 
     fn change_game_state(&mut self) {
@@ -457,9 +519,6 @@ impl Window {
             target.Clear(std::ptr::null());
             self.draw_cells()?;
             target.SetTarget(previous.as_ref());
-            target.SetTransform(&Matrix3x2::translation(5.0, 5.0));
-
-            target.SetTransform(&Matrix3x2::identity());
 
             target.DrawImage(game_space.as_ref().unwrap(), std::ptr::null(), std::ptr::null(), D2D1_INTERPOLATION_MODE_LINEAR, D2D1_COMPOSITE_MODE_SOURCE_OVER);
         }
@@ -471,49 +530,11 @@ impl Window {
         let target = self.target.as_ref().unwrap();
         let brush = self.brush.as_ref().unwrap();
 
-        let size: i32 = 2;
-        let mut left_position: i32 = size;
-        let mut top_position: i32 = size;
-        let mut right_position: i32 = size * 2;
-        let mut bottom_position: i32 = size * 2;
-
-        let mut prev_cell_position_y: u16 = 1;
-
-        let mut rect = D2D_RECT_F {
-            left: left_position as f32,
-            top: top_position as f32,
-            right: right_position as f32,
-            bottom: bottom_position as f32,
-        };
-
-        for cell_column in &self.game_state.cells.cells_array {
-            for cell in cell_column {
-                if prev_cell_position_y < cell.position_y {
-                    left_position = size;
-                    top_position = top_position + size;
-                    right_position = size * 2;
-                    bottom_position = bottom_position + size;
-
-                    rect.left = left_position as f32;
-                    rect.top = top_position as f32;
-                    rect.right = right_position as f32;
-                    rect.bottom = bottom_position as f32;
-                }
-                if cell.is_fill == true {
-                    unsafe {
-                        target.FillRectangle(&rect, brush);
-                    }
-                }
-
-                left_position = left_position + size;
-                right_position = right_position + size;
-
-                rect.left = left_position as f32;
-                rect.right = right_position as f32;
-
-                prev_cell_position_y = cell.position_y;
+        self.game_state.rectangles_for_render.iter().for_each(|rect| {
+            unsafe {
+                target.FillRectangle(rect, brush);
             }
-        }
+        });
 
         Ok(())
     }
@@ -630,19 +651,30 @@ impl Window {
 
             loop {
                 if self.visible {
+
+                    let mut handle = io::BufWriter::new(&stdout);
+
+                    // update logic
                     let update_time = Instant::now();
 
                     self.game_state.cell_status_update();
+
+                    //writeln!(handle, "update logic time: {} millis", update_time.elapsed().as_millis() as u16);
+                    
+                    // draw
+                    //let update_time_draw = Instant::now();
+
                     self.render()?;
+
+                    //writeln!(handle, "draw time: {} millis", update_time_draw.elapsed().as_millis() as u16);
 
                     //clear_console();
 
-                    let mut handle = io::BufWriter::new(&stdout);
-                    writeln!(handle, "render time: {} millis", update_time.elapsed().as_millis() as u16);
+                    writeln!(handle, "{}", self.game_state.fps);
 
                     thread::sleep(Duration::from_millis(MINIMAL_UPDATE_DELAY as u64));
 
-                    //self.game_state.fps = format!("fps: {}", 1000 / update_time.elapsed().as_millis());
+                    self.game_state.fps = format!("fps: {}", 1000 / update_time.elapsed().as_millis());
 
                     while PeekMessageA(&mut message, None, 0, 0, PM_REMOVE).into() {
                         if message.message == WM_QUIT {
